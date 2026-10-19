@@ -24,8 +24,8 @@ Manual call review doesn’t scale. Sales enablement teams can listen to a handf
 
 ```text
 ┌─────────────────────────┐     ┌───────────────────────┐
-│  Clari Copilot         │     │  Salesforce (SFDC)     │
-│  call_details           │     │  Sales_Classification  │
+│  Call Intelligence     │     │  Salesforce (SFDC)     │
+│  call_transcripts       │     │  Sales_Classification  │
 │  (structured transcripts│     │  (GTM role mapping)    │
 │   with speaker labels)  │     │                       │
 └────────────┬────────────┘     └───────────┬───────────┘
@@ -54,57 +54,84 @@ Manual call review doesn’t scale. Sales enablement teams can listen to a handf
         │  (total_weighted_score,        │  → overall coaching summary
         │   overall_summary)            │
         └───────────────────────────────┘
-Scoring Framework: 12 Categories × 3 Enablement Frameworks
-#	Category	Weight	Framework
-1	Value Narrative	12%	Command of the Message
-2	Product & Technical Depth	15%	Product Acumen
-3	Discovery Execution	12%	CoM + MEDDPICC
-4	Competitive Positioning	5%	Product Acumen
-5	Risk & Objection Handling	8%	Command of the Message
-6	Prescriptive Guidance	8%	Command of the Message
-7	Success Criteria	8%	MEDDPICC
-8	Decision Process	5%	MEDDPICC
-9	Multi-Stakeholder Engagement	8%	MEDDPICC
-10	Meeting Control	5%	General Execution
-11	Next Steps & Accountability	6%	General Execution
-12	Rapport & Relationship Building	8%	General Execution
-Anchor Bands: GOOD (80–100), MEDIUM (50–79), POOR (0–49)
+```
 
-Tech Stack
-Layer	Tool
-AI Engine	Databricks ai_query() SQL function
-LLM	Claude Opus (production), Claude Sonnet (initial pilot)
-Output Enforcement	JSON Schema with strict: true
-Query Language	Databricks SQL (CTEs, LATERAL VIEW EXPLODE, from_json)
-Source Data	Clari Copilot call transcripts (structured with speaker labels)
-Role Mapping	Salesforce Sales_Classification__c for GTM role filtering
-Platform	Databricks SQL Warehouse (Photon PRO)
-Prompt Engineering Highlights
-8 Core Rules (embedded in every scoring prompt)
-Ground in transcript — score only what the transcript contains, never infer
-Verbatim evidence — every score requires a direct quote
-N/A handling — categories not applicable to the call type score as null
-Category independence — each category scored without reference to others
-Band→score enforcement — GOOD must score 80–100, MEDIUM 50–79, POOR 0–49
-Tiebreaker — when evidence is borderline, anchor to the lower band
-Mixed-evidence anchoring — with worked example for partial-credit scenarios
-Structured improvements — actionable coaching suggestions per category
-Key Iteration Milestones
-Multi-rep scoring: Changed from organizer-only to all GTM roles per call (TM, SE, CSM, SDR)
-Deterministic baseline: Temperature set to 0.0 for reproducible evaluation
-Transcript audit-driven calibration: Baptist Memorial audit revealed under-scoring in Multi-Stakeholder Engagement — Cat 9 descriptors refined with explicit examples
-N/A normalization: SUM(weighted_score) / SUM(weight_pct WHERE scored) * 100 prevents N/A categories from suppressing scores
-3-band simplification: Reduced from 4 anchor bands to 3 (GOOD/MEDIUM/POOR) for coaching clarity
-Pilot Results (Deterministic Baseline — Opus temp=0)
-Role	Avg Score	Reps Scored
-SDR	59.0	Pilot cohort
-TM (Territory Manager)	55.3	Pilot cohort
-SE (Sales Engineer)	50.5	Pilot cohort
-CSM	48.5	Pilot cohort
-23 total GOODs across all reps and categories
-Rapport (Cat 12) is the only category reliably hitting GOOD across all runs
-Zero-GOOD categories: Value Narrative, Discovery, Success Criteria, Meeting Control, Multi-Stakeholder
-Project Structure
+---
+
+## Scoring Framework: 12 Categories × 3 Enablement Frameworks
+
+| # | Category | Weight | Framework |
+|---|---|---|---|
+| 1 | Value Narrative | 12% | Command of the Message |
+| 2 | Product & Technical Depth | 15% | Product Acumen |
+| 3 | Discovery Execution | 12% | CoM + MEDDPICC |
+| 4 | Competitive Positioning | 5% | Product Acumen |
+| 5 | Risk & Objection Handling | 8% | Command of the Message |
+| 6 | Prescriptive Guidance | 8% | Command of the Message |
+| 7 | Success Criteria | 8% | MEDDPICC |
+| 8 | Decision Process | 5% | MEDDPICC |
+| 9 | Multi-Stakeholder Engagement | 8% | MEDDPICC |
+| 10 | Meeting Control | 5% | General Execution |
+| 11 | Next Steps & Accountability | 6% | General Execution |
+| 12 | Rapport & Relationship Building | 8% | General Execution |
+
+**Anchor Bands:** GOOD (80–100), MEDIUM (50–79), POOR (0–49)
+
+---
+
+## Tech Stack
+
+| Layer | Tool |
+|---|---|
+| **AI Engine** | Databricks `ai_query()` SQL function |
+| **LLM** | Claude Opus (production), Claude Sonnet (initial pilot) |
+| **Output Enforcement** | JSON Schema with `strict: true` |
+| **Query Language** | Databricks SQL (CTEs, LATERAL VIEW EXPLODE, `from_json`) |
+| **Source Data** | Call intelligence platform transcripts (structured with speaker labels) |
+| **Role Mapping** | Salesforce custom field for GTM role filtering |
+| **Platform** | Databricks SQL Warehouse (Photon PRO) |
+
+---
+
+## Prompt Engineering Highlights
+
+### 8 Core Rules (embedded in every scoring prompt)
+1. **Ground in transcript** — score only what the transcript contains, never infer
+2. **Verbatim evidence** — every score requires a direct quote
+3. **N/A handling** — categories not applicable to the call type score as null
+4. **Category independence** — each category scored without reference to others
+5. **Band→score enforcement** — GOOD must score 80–100, MEDIUM 50–79, POOR 0–49
+6. **Tiebreaker** — when evidence is borderline, anchor to the lower band
+7. **Mixed-evidence anchoring** — with worked example for partial-credit scenarios
+8. **Structured improvements** — actionable coaching suggestions per category
+
+### Key Iteration Milestones
+* **Multi-rep scoring**: Changed from organizer-only to all GTM roles per call (TM, SE, CSM, SDR)
+* **Deterministic baseline**: Temperature set to 0.0 for reproducible evaluation
+* **Transcript audit-driven calibration**: A targeted transcript audit revealed under-scoring in Multi-Stakeholder Engagement — Cat 9 descriptors refined with explicit examples
+* **N/A normalization**: `SUM(weighted_score) / SUM(weight_pct WHERE scored) * 100` prevents N/A categories from suppressing scores
+* **3-band simplification**: Reduced from 4 anchor bands to 3 (GOOD/MEDIUM/POOR) for coaching clarity
+
+---
+
+## Pilot Results (Deterministic Baseline — Opus temp=0)
+
+| Role | Avg Score | Reps Scored |
+|---|---|---|
+| SDR | 59.0 | Pilot cohort |
+| TM (Territory Manager) | 55.3 | Pilot cohort |
+| SE (Sales Engineer) | 50.5 | Pilot cohort |
+| CSM | 48.5 | Pilot cohort |
+
+* **23 total GOODs** across all reps and categories
+* Rapport (Cat 12) is the **only** category reliably hitting GOOD across all runs
+* Zero-GOOD categories: Value Narrative, Discovery, Success Criteria, Meeting Control, Multi-Stakeholder
+
+---
+
+## Project Structure
+
+```text
 enablement-call-signal-scoring/
 ├── notebooks/
 │   ├── scoring_engine.sql           # Production scoring: CTE pipeline + ai_query
@@ -118,9 +145,15 @@ enablement-call-signal-scoring/
 │   ├── pilot_results.md             # Baseline analysis and role-level breakdowns
 │   └── project_documentation.md     # Full project documentation
 └── README.md
-What I Learned
-Structured output is non-negotiable for LLM pipelines: JSON Schema with strict: true eliminates parsing failures and makes downstream SQL deterministic
-Prompt engineering is iterative science, not creative writing: 8+ major revisions, each driven by transcript audits comparing model output to human judgment
-Temperature matters more than you think: The same prompt on Opus at temp=0.7 vs temp=0.0 produced materially different score distributions — deterministic baselines are required before comparing prompt versions
-Band descriptors are the real model: The LLM is only as good as the rubric — vague descriptors like "demonstrates good discovery" produce inconsistent scores; specific behavioral anchors ("asks at least two open-ended questions about business impact") produce calibrated ones
-Multi-rep scoring changes the grain and the cost: Going from 1 row/call to 1 row/call/rep tripled ai_query invocations — cost and latency planning must account for average reps per call
+```
+
+---
+
+## What I Learned
+
+* **Structured output is non-negotiable for LLM pipelines**: JSON Schema with `strict: true` eliminates parsing failures and makes downstream SQL deterministic
+* **Prompt engineering is iterative science, not creative writing**: 8+ major revisions, each driven by transcript audits comparing model output to human judgment
+* **Temperature matters more than you think**: The same prompt on Opus at temp=0.7 vs temp=0.0 produced materially different score distributions — deterministic baselines are required before comparing prompt versions
+* **Band descriptors are the real model**: The LLM is only as good as the rubric — vague descriptors like "demonstrates good discovery" produce inconsistent scores; specific behavioral anchors ("asks at least two open-ended questions about business impact") produce calibrated ones
+* **Multi-rep scoring changes the grain and the cost**: Going from 1 row/call to 1 row/call/rep tripled `ai_query` invocations — cost and latency planning must account for average reps per call
+```
